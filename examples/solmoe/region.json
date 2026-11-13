@@ -1,0 +1,9 @@
+{
+  "name": "솔뫼",
+  "aliases": ["솔뫼시"],
+  "database": "dllio_solmoe",
+  "coverage": "예제 도시 솔뫼시의 버스 노선·정류장",
+  "mapBox": "",
+  "fares": [{"pattern": "^[0-9]{4}$", "label": "요금 2배"}],
+  "fareOther": "일반"
+}

@@ -1,0 +1,13 @@
+{
+  "revisions": [
+    {"id": "before", "label": "개편 전 제공 시간표", "basis": "planned", "effectiveFrom": null, "effectiveTo": "2025-03-07", "observed": null,
+     "source": {"format": "visits", "visits": "before/visits.csv", "stops": "before/stops.csv"},
+     "notes": ["제공 시간표에 운행일·적용 기간이 없어 특정 날짜의 실제 운행으로 해석하지 않습니다."]},
+    {"id": "after", "label": "개편 후 관측 운행", "basis": "observed", "effectiveFrom": "2025-03-08", "effectiveTo": null, "observed": "2025-04-15",
+     "source": {"format": "visits", "visits": "after/visits.csv", "stops": "after/stops.csv"},
+     "notes": ["같은 차량·노선의 시간 순서와 정류장 방문 순번으로 관측 운행을 연결했습니다."]}
+  ],
+  "changes": [
+    {"route": "1500", "change": "출근 시간대 증차", "date": "2025-07-01"}
+  ]
+}

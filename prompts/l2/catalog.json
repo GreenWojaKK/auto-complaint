@@ -1,0 +1,75 @@
+[
+  {
+    "type": "frequency_insufficiency",
+    "query": true,
+    "proposition": "필요한 구간·시간대의 운행 횟수가 적거나 배차간격이 길다.",
+    "includes": "노선이 그 정류장이나 지역을 지나거나 그곳에 서지만, 서거나 지나는 버스(편수)가 많지 않다는 진술도 빈도 부족이다. 정차나 노선 자체가 없다는 진술은 spatial_coverage_gap이다.",
+    "negative": "정해진 시각 조건에 맞는 편이 없다는 주장은 temporal_fit_gap이다. 실제 운행이 예정에서 어긋난다는 주장은 schedule_unreliability다. 버스는 오는데 붐벼서 못 탄다는 주장은 capacity_shortfall이다. 노선이 수요 지점을 지나지 않는다는 주장은 spatial_coverage_gap이다."
+  },
+  {
+    "type": "temporal_fit_gap",
+    "query": true,
+    "proposition": "운행시각이 이용자가 이동해야 하는 시간 조건에 맞지 않는다.",
+    "negative": "시간 조건(출근·등교 시각, 첫차·막차, 특정 시간대 도착 등) 없이 편수·간격만 말하면 frequency_insufficiency다. 예정 시각은 맞는데 실제 운행이 어긋나는 것은 schedule_unreliability다."
+  },
+  {
+    "type": "spatial_coverage_gap",
+    "query": true,
+    "proposition": "수요가 있는 공간에 필요한 정차·노선 공급이 배치되어 있지 않다.",
+    "negative": "노선이 그 공간을 지나지만 편수가 적은 것은 frequency_insufficiency다. 출발지와 도착지가 각각 서비스되는데 둘을 잇는 노선이 없는 것은 direct_connectivity_deficit다."
+  },
+  {
+    "type": "direct_connectivity_deficit",
+    "query": true,
+    "proposition": "관련 O-D가 각각 서비스되더라도 이를 직접 연결하는 실용적인 서비스가 부족하다.",
+    "negative": "출발지나 도착지 자체에 공급이 없는 것은 spatial_coverage_gap이다. 실제 이동에서 겪는 우회·환승·시간 부담에 대한 진술은 journey_burden이다."
+  },
+  {
+    "type": "journey_burden",
+    "query": true,
+    "proposition": "실제 여정에 과도한 우회·환승·이동시간이 발생한다.",
+    "negative": "정류장에서 다음 편을 오래 기다리는 것은 frequency_insufficiency다. 환승 지점의 대기나 환승 제한처럼 환승을 받쳐 줄 배차·규칙이 없다는 주장은 transfer_dependency_gap이다. 직접 잇는 노선이 없다는 구조에 대한 주장은 direct_connectivity_deficit다."
+  },
+  {
+    "type": "schedule_unreliability",
+    "query": true,
+    "proposition": "실제 운행시각이 예정과 반복적으로 어긋나 예측하기 어렵다.",
+    "negative": "예정 시각 자체가 이용 조건에 맞지 않는 것은 temporal_fit_gap이다. 예정 간격이 긴 것은 frequency_insufficiency다. 안내 정보가 실제와 다르다는 주장은 information_defect다. 예정 시각과 실제 운행 시각이 다르다는 진술이 있어야 하며, 오래 기다렸다는 것이나 도착 정보가 부족하다는 것만으로는 해당하지 않는다."
+  },
+  {
+    "type": "capacity_shortfall",
+    "query": true,
+    "proposition": "제공 용량에 비해 이용수요가 커 혼잡·승차 실패가 발생한다.",
+    "fit": "승객이 몰리는 노선·시간대의 운행 횟수가 적거나 운행 시각이 맞지 않는다.",
+    "negative": "버스가 오지 않거나 드물어서 못 타는 것은 frequency_insufficiency다. 혼잡·만차·승차 거부 같은 용량 초과가 드러나야 한다."
+  },
+  {
+    "type": "information_defect",
+    "query": false,
+    "proposition": "이용에 필요한 운행정보가 실제와 다르거나 부족하다.",
+    "negative": "운행 자체가 예정에서 어긋나는 것은 schedule_unreliability다. 안내 채널(전광판, 포털, 앱, 도착 정보, 공지 등)이 전하는 내용에 대한 진술만 해당한다."
+  },
+  {
+    "type": "transfer_dependency_gap",
+    "query": true,
+    "proposition": "노선 체계가 전제하는 환승을 배차와 환승 규칙이 받쳐 주지 못한다.",
+    "includes": "환승 지점의 대기, 갈아탈 버스가 적거나 없거나 시간이 맞지 않는 것, 환승 제한시간·횟수·할인 같은 규칙이 환승을 막는 것이 모두 해당한다.",
+    "negative": "환승 때문에 여정이 길고 번거롭다는 이용 경험만 말하면 journey_burden이다. 환승과 상관없는 요금 수준에 대한 의견은 해당하지 않는다.",
+    "aspects": [
+      {
+        "name": "connection",
+        "label": "환승 연결",
+        "query": true,
+        "proposition": "갈아탈 버스와의 연결이 문제다.",
+        "includes": "환승 지점의 대기, 갈아탈 버스가 적거나 없음, 환승 버스끼리 시간이 맞지 않음."
+      },
+      {
+        "name": "rule",
+        "label": "환승 규칙",
+        "query": false,
+        "proposition": "환승 규칙이 이용을 제약한다.",
+        "includes": "환승 제한시간, 환승 횟수, 환승 할인과 그 기준에 대한 불만이나 요구."
+      }
+    ]
+  }
+]

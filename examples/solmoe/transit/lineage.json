@@ -1,0 +1,80 @@
+{
+ "source": {
+  "file": "tools/build_example_city.py",
+  "sha256": "8bf40c9c5252030ad3d7180cbb2b61361bcdfe8a53bdeadf66b68e7b352c2d2f",
+  "sheets": 9
+ },
+ "lineage": [
+  {
+   "route": "101",
+   "previous": [
+    "15"
+   ],
+   "created": false,
+   "note": null,
+   "sheet": "101(구15)"
+  },
+  {
+   "route": "102",
+   "previous": [],
+   "created": false,
+   "note": null,
+   "sheet": "102"
+  },
+  {
+   "route": "105",
+   "previous": [],
+   "created": false,
+   "note": null,
+   "sheet": "105"
+  },
+  {
+   "route": "110",
+   "previous": [],
+   "created": false,
+   "note": null,
+   "sheet": "110"
+  },
+  {
+   "route": "207",
+   "previous": [
+    "27"
+   ],
+   "created": false,
+   "note": null,
+   "sheet": "207(구27)"
+  },
+  {
+   "route": "210",
+   "previous": [
+    "33"
+   ],
+   "created": false,
+   "note": null,
+   "sheet": "210(구33)"
+  },
+  {
+   "route": "211",
+   "previous": [
+    "33"
+   ],
+   "created": false,
+   "note": null,
+   "sheet": "211(구33)"
+  },
+  {
+   "route": "301",
+   "previous": [],
+   "created": true,
+   "note": null,
+   "sheet": "301(신설)"
+  },
+  {
+   "route": "1500",
+   "previous": [],
+   "created": false,
+   "note": null,
+   "sheet": "1500"
+  }
+ ]
+}

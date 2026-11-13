@@ -1,0 +1,34 @@
+.dev*.vars
+.dev*.vars.*
+.env
+.env.*
+env.local
+!.env.example
+tmp/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+app/private-data/
+jevkey*.txt
+.venv/
+secrets/
+/viewer/target/
+.claude/
+# 실제 지역 자료(민원 원문·교통 원천 자료)는 저장소에 올리지 않는다. 예제 도시는 examples/에 둔다.
+private/
+# 전처리 결과는 지역 폴더의 원천 자료에서 다시 만든다.
+examples/*/build/
+# 작업 이력 문서는 올리지 않는다.
+/docs/PROJECT_STATE.md
+# 옛 문서 사본은 올리지 않는다.
+/archive/
+# 작업 규칙·보류 항목·시험 코드는 올리지 않는다.
+/AGENTS.md
+/DEFERRED.md
+/test/
+/viewer/
+/app/
