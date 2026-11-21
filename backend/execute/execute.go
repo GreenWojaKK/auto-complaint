@@ -402,6 +402,14 @@ func (r *runner) query(run J, function string, body J) error {
 	return nil
 }
 
+// firstID는 후보 id 목록의 첫 id다. 여정은 출발·도착 후보를 하나씩만 쓴다.
+func firstID(v any) string {
+	if ids := jsonx.Strs(v); len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
+}
+
 func boardingName(ids []string, places map[string]J) string {
 	names := []string{}
 	for _, id := range ids {
@@ -415,16 +423,16 @@ func (r *runner) once(m J, run J, revision string, routes []string, places map[s
 	window := jsonx.Obj(m["window"])
 	switch jsonx.Str(m["method"]) {
 	case "departures":
-		boarding, err := r.stops(jsonx.Strs(m["boarding"]), places, revision)
+		boarding, err := r.stops(jsonx.Strs(m["boarding_candidates"]), places, revision)
 		if err != nil {
 			return err
 		}
-		destination, err := r.stops(jsonx.Strs(m["destination"]), places, revision)
+		destination, err := r.stops(jsonx.Strs(m["destination_candidates"]), places, revision)
 		if err != nil {
 			return err
 		}
-		run["stops"] = J{"boarding": len(boarding), "destination": len(destination)}
-		for _, id := range jsonx.Strs(m["boarding"]) {
+		run["stop_counts"] = J{"boarding": len(boarding), "destination": len(destination)}
+		for _, id := range jsonx.Strs(m["boarding_candidates"]) {
 			if jsonx.Str(places[id]["scope"]) == "district" {
 				run["district"] = true
 			}
@@ -437,7 +445,7 @@ func (r *runner) once(m J, run J, revision string, routes []string, places map[s
 			seconds(jsonx.Str(window["end"])), jsonx.Str(m["time_kind"]), Literal(destination), m["direct"] == true)
 		// 정류장이 여러 개인 장소는 정확한 통과 시각이 정해지지 않으므로 한 번 지나는 동안의 평균 시각으로 노선마다 한 줄이다.
 		wide := len(boarding) > 1
-		label := "'" + strings.ReplaceAll(boardingName(jsonx.Strs(m["boarding"]), places), "'", "''") + "'"
+		label := "'" + strings.ReplaceAll(boardingName(jsonx.Strs(m["boarding_candidates"]), places), "'", "''") + "'"
 		summaryQuery := "SELECT * FROM calls_summary(" + args + ")"
 		if wide {
 			run["place"] = true
@@ -497,8 +505,8 @@ func (r *runner) once(m J, run J, revision string, routes []string, places map[s
 		start, _ := Minutes(jsonx.Str(window["start"]))
 		end, _ := Minutes(jsonx.Str(window["end"]))
 		end = min(end, 24*60-1)
-		base := J{"operation": "journeys", "dataset": revision, "origin": places[jsonx.Str(m["origin"])]["place_id"],
-			"destination": places[jsonx.Str(m["destination"])]["place_id"], "arrive_by": m["arrive_by"], "start": window["start"], "end": Clock(end),
+		base := J{"operation": "journeys", "dataset": revision, "origin": places[firstID(m["origin_candidates"])]["place_id"],
+			"destination": places[firstID(m["destination_candidates"])]["place_id"], "arrive_by": m["arrive_by"], "start": window["start"], "end": Clock(end),
 			"walk_meters": m["walk_meters"], "transfers": m["transfers"], "routes": routes}
 		// 여정 조회는 한 기준 시각에서 4시간 안에 닿는 여정을 찾는다. 출발 기준이면 시간대를 매시 기준 시각으로 나눠
 		// 시간대 전체의 여정을 본다. 도착 기한이면 시간대의 끝 하나다.
@@ -519,15 +527,15 @@ func (r *runner) once(m J, run J, revision string, routes []string, places map[s
 			}
 		}
 	case "segments":
-		origin, err := r.stops(jsonx.Strs(m["origin"]), places, revision)
+		origin, err := r.stops(jsonx.Strs(m["origin_candidates"]), places, revision)
 		if err != nil {
 			return err
 		}
-		destination, err := r.stops(jsonx.Strs(m["destination"]), places, revision)
+		destination, err := r.stops(jsonx.Strs(m["destination_candidates"]), places, revision)
 		if err != nil {
 			return err
 		}
-		run["stops"] = J{"origin": len(origin), "destination": len(destination)}
+		run["stop_counts"] = J{"origin": len(origin), "destination": len(destination)}
 		if len(origin) == 0 || len(destination) == 0 {
 			run["note"] = "이 판에 출발 또는 도착 장소의 정류장이 수록되어 있지 않다"
 			return nil
@@ -537,7 +545,7 @@ func (r *runner) once(m J, run J, revision string, routes []string, places map[s
 		return r.query(run, "segments", body)
 	case "map":
 		named := []string{}
-		for _, s := range jsonx.Strs(m["stops"]) {
+		for _, s := range jsonx.Strs(m["map_mentions"]) {
 			if text, ok := texts[s]; ok {
 				named = append(named, text)
 			}

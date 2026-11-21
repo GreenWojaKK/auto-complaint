@@ -138,7 +138,7 @@ func candidateText(cid string, mentions map[string]J, revision string) string {
 	}
 	if jsonx.Str(cand["kind"]) == "nearby" {
 		out := prefix + jsonx.Str(cand["basis"]) + ": " + strings.Join(jsonx.Strs(cand["places"]), "·") + " 주변"
-		if stops, ok := jsonx.Obj(cand["stops"])[revision]; ok && stops != nil {
+		if stops, ok := jsonx.Obj(cand["stop_counts"])[revision]; ok && stops != nil {
 			out += " (정류장 " + pyText(stops) + "곳)"
 		}
 		return out
@@ -149,7 +149,7 @@ func candidateText(cid string, mentions map[string]J, revision string) string {
 			areas = append(areas, jsonx.Str(jsonx.Obj(a)["area"]))
 		}
 		out := prefix + jsonx.Str(cand["basis"]) + ": " + strings.Join(areas, "·")
-		if stops, ok := jsonx.Obj(cand["stops"])[revision]; ok && stops != nil {
+		if stops, ok := jsonx.Obj(cand["stop_counts"])[revision]; ok && stops != nil {
 			out += " (정류장 " + pyText(stops) + "곳)"
 		}
 		return out
@@ -169,14 +169,14 @@ func Conditions(method J, mentions map[string]J, revision string) [][]string {
 	if before := jsonx.Strs(method["before_routes"]); len(before) > 0 {
 		rows = append(rows, []string{"개편 전 노선", strings.Join(before, ", ")})
 	}
-	for _, f := range [][2]string{{"boarding", "승차"}, {"origin", "출발"}, {"destination", "도착"}} {
+	for _, f := range [][2]string{{"boarding_candidates", "승차"}, {"origin_candidates", "출발"}, {"destination_candidates", "도착"}} {
 		if list := ids(method[f[0]]); len(list) > 0 {
 			texts := []string{}
 			for _, c := range list {
 				texts = append(texts, candidateText(c, mentions, revision))
 			}
 			label := f[1]
-			if f[0] == "boarding" && method["at_destination"] == true {
+			if f[0] == "boarding_candidates" && method["at_destination"] == true {
 				label = "도착"
 			}
 			rows = append(rows, []string{label, strings.Join(texts, " / ")})
@@ -206,9 +206,9 @@ func Conditions(method J, mentions map[string]J, revision string) [][]string {
 		}
 		rows = append(rows, []string{"여정 조건", fmt.Sprintf("%s, 환승 %s회 이하, 총 도보 %sm 이하", basis, pyText(method["transfers"]), pyText(method["walk_meters"]))})
 	}
-	if kind == "map" && truthy(method["stops"]) {
+	if kind == "map" && truthy(method["map_mentions"]) {
 		texts := []string{}
-		for _, s := range jsonx.Strs(method["stops"]) {
+		for _, s := range jsonx.Strs(method["map_mentions"]) {
 			if m, ok := mentions[s]; ok {
 				texts = append(texts, plan.MentionLabel(m))
 			}
@@ -237,9 +237,9 @@ func RouteLabel(method J, mentions map[string]J) string {
 		}
 		return strings.Join(texts, "·")
 	}
-	start, end := names("boarding"), names("destination")
+	start, end := names("boarding_candidates"), names("destination_candidates")
 	if start == "" {
-		start = names("origin")
+		start = names("origin_candidates")
 	}
 	switch {
 	case start != "" && end != "":

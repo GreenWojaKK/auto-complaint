@@ -7,7 +7,7 @@
 - **이동**: 유형마다 원문이 말한 출발지·도착지, 시간대, 시민이 말한 수치, 대상(노선·정류장·장소)이다.
 - **L1**: 행정 검토자가 읽는 요약(한줄요약, 상황, 요청, 문의)이다. 선택한 L2와 추출한 이동을 기반으로 작성한다.
 
-민원 읽기는 추상에서 구체로 진행한다. L2를 먼저 정하고, 이동과 L1은 그 L2를 기반으로 쓴다. 표현 규칙은 [READING_LEVELS](READING_LEVELS.md)를 따른다.
+민원 읽기는 추상에서 구체로 진행한다. L2를 먼저 정하고, 이동과 L1은 그 L2를 기반으로 쓴다. 개념별 이름은 [CODEBASE_GLOSSARY](CODEBASE_GLOSSARY.md)를 따른다.
 
 ## 단계와 담당
 
@@ -23,7 +23,150 @@
 언어 모델은 지정된 출력 schema에 맞춰 생성한다. 코드가 결과를 검증하고, 실패하면 검증 이유를 포함해 재작성을 요청한다.
 판정은 `d3-ultra`의 판정 출력이 맡고, 쓰기는 Raon-1-mini-preview가 맡는다. 두 모델은 서로 다른 프로세스에서 돈다.
 코드는 조회의 종류와 조건을 선택지로 구성한다. 판정 모델은 실행할 선택지를 고르고, 조회 실행 단계가 해당 조건으로 도구를 호출한다.
-단계별 규칙은 [ANALYSIS_STAGES](ANALYSIS_STAGES.md), 호출 방식은 [MODEL_RUNTIME](MODEL_RUNTIME.md)을 따른다.
+단계별 설계는 [ANALYSIS_STAGES](ANALYSIS_STAGES.md), 호출 방식은 [MODEL_RUNTIME](MODEL_RUNTIME.md), 이름은 [CODEBASE_GLOSSARY](CODEBASE_GLOSSARY.md)를 따른다.
+
+## 흐름
+
+단계마다 코드, 판정 모델, 언어 모델이 맡는 일을 lane으로 나눈다. 마름모는 분기이고, 점선은 검사에 걸려 언어 모델에 다시 쓰게 하는 경로다. 노드가 하는 일의 조건은 [ANALYSIS_STAGES](ANALYSIS_STAGES.md)를 따른다.
+
+### 문제 유형 판정
+
+```mermaid
+flowchart TB
+    subgraph code["코드"]
+        direction TB
+        p1["유형 문항 만들기"]
+        p3["유형 고르기"]
+        p4{"측면이 있는 유형인가"}
+        p6["조회하지 않는 유형·측면 구분"]
+    end
+    subgraph judge["판정 모델"]
+        direction TB
+        p2["유형 판정"]
+        p5["측면 판정"]
+    end
+    p1 --> p2 --> p3 --> p4
+    p4 -- 예 --> p5 --> p6
+    p4 -- 아니오 --> p6
+```
+
+### 문제별 추출
+
+```mermaid
+flowchart TB
+    subgraph code["코드"]
+        direction TB
+        e2{"조회하는 유형인가"}
+        e5["원문 대조 정리"]
+        e7{"장소 지칭이 지시 표현인가"}
+        e9["지시 표현 답 검사"]
+        e10["지역 사전 값 붙이기"]
+    end
+    subgraph lm["언어 모델"]
+        direction TB
+        e1["유형별 불편 요약"]
+        e3["유형별 이동과 근거"]
+        e4["근거 문장만"]
+        e8["지시 표현이 가리키는 지칭"]
+    end
+    e1 -. 실패 .-> e1
+    e1 --> e2
+    e2 -- 예 --> e3 --> e5
+    e2 -- 아니오 --> e4 --> e5
+    e5 --> e7
+    e7 -- 예 --> e8 --> e9
+    e9 -. 실패 .-> e8
+    e9 --> e10
+    e7 -- 아니오 --> e10
+```
+
+### 후보 준비와 계획
+
+```mermaid
+flowchart TB
+    subgraph code["코드"]
+        direction TB
+        c1["지칭별 후보 검색"]
+        c2{"후보가 남지 않은 장소 지칭이고 지도 범위가 있는가"}
+        c3["지도 검색"]
+        c4{"비교 이동에 개편 전 번호가 없는가"}
+        c5["개편 전 노선 후보"]
+        c6["조회 선택지 구성"]
+        c7["통과한 선택지 합치기"]
+        c8["계획 검사"]
+        c9["L1 정리"]
+        c10["todo로 풀기"]
+    end
+    subgraph judge["판정 모델"]
+        direction TB
+        j1["장소 대응 판정"]
+        j2["지도 검색 결과 판정"]
+        j3["이동 간 조건 연결"]
+        j4["개편 전 노선 판정"]
+        j5["조회 판정"]
+    end
+    subgraph lm["언어 모델"]
+        direction TB
+        l1["L1과 조회별 질문"]
+    end
+    c1 --> j1 --> c2
+    c2 -- 예 --> c3 --> j2 --> j3
+    c2 -- 아니오 --> j3
+    j3 --> c4
+    c4 -- 예 --> c5 --> j4 --> c6
+    c4 -- 아니오 --> c6
+    c6 --> j5 --> c7 --> l1 --> c8
+    c8 -. 실패 .-> l1
+    c8 --> c9 --> c10
+```
+
+### 조회 실행
+
+```mermaid
+flowchart TB
+    subgraph code["코드"]
+        direction TB
+        x1{"이동의 시기 표시"}
+        x2["개편 전·후 자료"]
+        x3["개편 전 자료"]
+        x4["접수일의 자료"]
+        x5{"그 판에 노선·승차 정류장이 있는가"}
+        x6["조회하지 않은 사실 기록"]
+        x7["조회 실행"]
+        x8["집계"]
+    end
+    x1 -- 비교 --> x2 --> x5
+    x1 -- 개편 전 --> x3 --> x5
+    x1 -- "개편 후·없음" --> x4 --> x5
+    x5 -- 아니오 --> x6
+    x5 -- 예 --> x7 --> x8
+```
+
+### 답과 화면 구성
+
+```mermaid
+flowchart TB
+    subgraph code["코드"]
+        direction TB
+        k1["블록 후보 만들기"]
+        k2{"todo가 있는가"}
+        k3["조회 값 입력 구성"]
+        k4["답 정리"]
+        k5["근거 경로 잇기"]
+        k6["답 검사"]
+        k7["페이지 정리"]
+        k8["view 쓰기"]
+    end
+    subgraph lm["언어 모델"]
+        direction TB
+        m1["답과 페이지"]
+    end
+    k1 --> k2
+    k2 -- 아니오 --> k8
+    k2 -- 예 --> k3 --> m1 --> k4 --> k5 --> k6
+    k6 -. 실패 .-> m1
+    k6 --> k7 --> k8
+```
 
 ## 원칙
 

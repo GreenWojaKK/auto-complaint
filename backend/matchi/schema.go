@@ -11,10 +11,19 @@ import (
 	"dllio/backend/jsonx"
 )
 
+// Limit은 배열 필드의 항목 수 하한·상한이다. 음수이면 제한하지 않는다.
+type Limit struct {
+	Min, Max int
+}
+
 // SchemaOf는 구조체 T의 JSON 출력 형식이다. 항목 설명은 desc, 고정된 보기는 enum(쉼표로 구분), 목록 길이는 min과 max 태그로 적는다.
-// 값이 민원마다 달라지는 보기는 enums에 "형식이름.필드이름"으로 넘긴다. 포인터 필드는 null을 허용한다.
-func SchemaOf[T any](enums map[string][]string) (jsonx.Object, error) {
-	b := schemaBuilder{enums: enums, defs: map[string]jsonx.Object{}}
+// 값이 민원마다 달라지는 보기는 enums에, 목록 길이는 limits에 "형식이름.필드이름"으로 넘긴다. 포인터 필드는 null을 허용한다.
+func SchemaOf[T any](enums map[string][]string, limits ...map[string]Limit) (jsonx.Object, error) {
+	var lim map[string]Limit
+	if len(limits) > 0 {
+		lim = limits[0]
+	}
+	b := schemaBuilder{enums: enums, limits: lim, defs: map[string]jsonx.Object{}}
 	root, err := b.object(reflect.TypeFor[T]())
 	if err != nil {
 		return nil, err
@@ -35,8 +44,9 @@ func SchemaOf[T any](enums map[string][]string) (jsonx.Object, error) {
 }
 
 type schemaBuilder struct {
-	enums map[string][]string
-	defs  map[string]jsonx.Object
+	enums  map[string][]string
+	limits map[string]Limit
+	defs   map[string]jsonx.Object
 }
 
 func (b *schemaBuilder) object(t reflect.Type) (jsonx.Object, error) {
@@ -63,7 +73,8 @@ func (b *schemaBuilder) object(t reflect.Type) (jsonx.Object, error) {
 
 func (b *schemaBuilder) field(owner reflect.Type, f reflect.StructField, name string) (jsonx.Object, error) {
 	var value jsonx.Object
-	enum := b.enums[owner.Name()+"."+name]
+	key := owner.Name() + "." + name
+	enum := b.enums[key]
 	if tag := f.Tag.Get("enum"); tag != "" {
 		enum = strings.Split(tag, ",")
 	}
@@ -78,14 +89,14 @@ func (b *schemaBuilder) field(owner reflect.Type, f reflect.StructField, name st
 	if enum != nil {
 		return append(desc, jsonx.Field{Key: "enum", Value: enum}, jsonx.Field{Key: "type", Value: "string"}), nil
 	}
-	value, err := b.value(f.Type, f)
+	value, err := b.value(f.Type, f, key)
 	if err != nil {
 		return nil, err
 	}
 	return append(desc, value...), nil
 }
 
-func (b *schemaBuilder) value(t reflect.Type, f reflect.StructField) (jsonx.Object, error) {
+func (b *schemaBuilder) value(t reflect.Type, f reflect.StructField, key string) (jsonx.Object, error) {
 	switch t.Kind() {
 	case reflect.String:
 		// maxlen 태그는 글자 수 상한이다.
@@ -104,24 +115,33 @@ func (b *schemaBuilder) value(t reflect.Type, f reflect.StructField) (jsonx.Obje
 	case reflect.Float64:
 		return jsonx.Object{{Key: "type", Value: "number"}}, nil
 	case reflect.Pointer:
-		inner, err := b.value(t.Elem(), f)
+		inner, err := b.value(t.Elem(), f, key)
 		if err != nil {
 			return nil, err
 		}
 		return jsonx.Object{{Key: "anyOf", Value: []any{inner, jsonx.Object{{Key: "type", Value: "null"}}}}}, nil
 	case reflect.Slice:
-		items, err := b.value(t.Elem(), reflect.StructField{})
+		items, err := b.value(t.Elem(), reflect.StructField{}, "")
 		if err != nil {
 			return nil, err
 		}
 		out := jsonx.Object{{Key: "items", Value: items}}
-		for _, limit := range [][2]string{{"max", "maxItems"}, {"min", "minItems"}} {
-			if tag := f.Tag.Get(limit[0]); tag != "" {
-				n, err := strconv.Atoi(tag)
-				if err != nil {
-					return nil, err
+		if lim, ok := b.limits[key]; ok {
+			if lim.Max >= 0 {
+				out = append(out, jsonx.Field{Key: "maxItems", Value: lim.Max})
+			}
+			if lim.Min >= 0 {
+				out = append(out, jsonx.Field{Key: "minItems", Value: lim.Min})
+			}
+		} else {
+			for _, limit := range [][2]string{{"max", "maxItems"}, {"min", "minItems"}} {
+				if tag := f.Tag.Get(limit[0]); tag != "" {
+					n, err := strconv.Atoi(tag)
+					if err != nil {
+						return nil, err
+					}
+					out = append(out, jsonx.Field{Key: limit[1], Value: n})
 				}
-				out = append(out, jsonx.Field{Key: limit[1], Value: n})
 			}
 		}
 		return append(out, jsonx.Field{Key: "type", Value: "array"}), nil

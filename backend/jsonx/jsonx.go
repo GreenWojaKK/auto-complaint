@@ -94,8 +94,20 @@ func Str(v any) string { s, _ := v.(string); return s }
 // List는 목록이면 그 목록, 아니면 nil이다.
 func List(v any) []any { l, _ := v.([]any); return l }
 
-// Obj는 객체면 그 객체, 아니면 nil이다.
-func Obj(v any) J { o, _ := v.(J); return o }
+// Obj는 객체면 그 객체, 아니면 nil이다. 순서 있는 Object는 같은 키와 값의 J로 바꿔 돌려준다.
+func Obj(v any) J {
+	switch o := v.(type) {
+	case J:
+		return o
+	case Object:
+		out := make(J, len(o))
+		for _, f := range o {
+			out[f.Key] = f.Value
+		}
+		return out
+	}
+	return nil
+}
 
 // Strs는 글 목록이다.
 func Strs(v any) []string {

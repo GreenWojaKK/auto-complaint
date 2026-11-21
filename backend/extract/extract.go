@@ -75,7 +75,7 @@ type Move struct {
 // Problem은 고른 유형 하나의 추출 결과다. Reading은 모델이 이동을 칸에 옮기기 전에 쓴, 이 문제가 걸린 이용 사정이다.
 type Problem struct {
 	Type      string   `json:"type"`
-	Reading   string   `json:"reading"`
+	Summary   string   `json:"summary"`
 	Grounding []string `json:"grounding"`
 	Moves     []Move   `json:"moves"`
 }
@@ -85,19 +85,19 @@ type Extraction struct {
 	Problems []Problem `json:"problems"`
 }
 
-// TypeShare는 고른 유형 하나에 대해 원문이 말하는 이용 사정이다.
-type TypeShare struct {
+// TypeSummary는 고른 유형 하나에 대해 원문이 말하는 불편 요약이다.
+type TypeSummary struct {
 	Type    string `json:"type" desc:"받은 유형 id 그대로"`
-	Reading string `json:"reading" desc:"원문이 이 유형의 문제를 어떤 이용 사정으로 말하는지 한 문장. 수치·시각은 그것이 말하는 불편의 유형에만 쓴다"`
+	Summary string `json:"summary" desc:"원문이 이 유형의 문제를 어떤 이용 사정으로 말하는지 한 문장. 수치·시각은 그것이 말하는 불편의 유형에만 쓴다"`
 }
 
-// Shares는 민원 하나에서 고른 유형들의 이용 사정이다. 유형마다 하나다. 모델이 유형들을 함께 보며 원문의 사실을 유형에 나눈다.
-type Shares struct {
-	Readings []TypeShare `json:"readings" max:"12"`
+// TypeSummaries는 민원 하나에서 고른 유형들의 불편 요약이다. 유형마다 하나다. 모델이 유형들을 함께 보며 원문의 사실을 유형에 나눈다.
+type TypeSummaries struct {
+	Items []TypeSummary `json:"summaries" max:"12"`
 }
 
-// TypeReading은 조회하는 유형 하나에 대한 모델의 출력 형식이다. 모델은 받은 이용 사정의 이동을 칸에 옮기고, 근거 문장을 고른다.
-type TypeReading struct {
+// TypeMoves는 조회하는 유형 하나에 대한 모델의 출력 형식이다. 모델은 받은 이용 사정의 이동을 칸에 옮기고, 근거 문장을 고른다.
+type TypeMoves struct {
 	Moves     []Move   `json:"moves" desc:"이번 유형의 사정에 나오는 이동. 출발지·도착지나 노선별 사정이 다르면 나눈다" max:"4"`
 	Grounding []string `json:"grounding" desc:"이번 유형의 문제를 말하는 원문 문장의 발췌. 원문 그대로" max:"12"`
 }
@@ -581,7 +581,7 @@ type ResolvedMove struct {
 // ResolvedProblem은 prior를 붙인 유형 하나의 결과다.
 type ResolvedProblem struct {
 	Type      string         `json:"type"`
-	Reading   string         `json:"reading,omitempty"`
+	Summary   string         `json:"summary,omitempty"`
 	Grounding []string       `json:"grounding"`
 	Moves     []ResolvedMove `json:"moves"`
 }
@@ -631,14 +631,14 @@ func (p *Priors) WithPriors(out *Extraction, noQuery []string, referents map[str
 				moves = append(moves, move)
 			}
 		}
-		result = append(result, ResolvedProblem{problem.Type, problem.Reading, problem.Grounding, moves})
+		result = append(result, ResolvedProblem{problem.Type, problem.Summary, problem.Grounding, moves})
 	}
 	return result
 }
 
 // Request는 유형 하나를 묻는 입력이다. 이 민원에서 고른 유형 전부와, 그 가운데 이번에 다룰 유형을 적는다.
-// ShareRequest는 유형마다 이용 사정을 쓰게 하는 요청의 입력이다.
-func ShareRequest(source string, types []string, catalog map[string]problems.Entry, parts []problems.NoQueryAspect) string {
+// SummaryRequest는 유형마다 불편 요약을 쓰게 하는 요청의 입력이다.
+func SummaryRequest(source string, types []string, catalog map[string]problems.Entry, parts []problems.NoQueryAspect) string {
 	return strings.TrimSuffix(Request(source, types, "", catalog, parts, nil), "\n\n이번에 다룰 유형: ")
 }
 
@@ -720,7 +720,7 @@ func Run(ctx context.Context, c Config) error {
 	if err != nil {
 		return err
 	}
-	sharePrompt, err := repo.ReadText(filepath.Join(c.Root, "prompts", "l2", "share.md"))
+	summaryPrompt, err := repo.ReadText(filepath.Join(c.Root, "prompts", "l2", "summary.md"))
 	if err != nil {
 		return err
 	}
@@ -796,35 +796,37 @@ func Run(ctx context.Context, c Config) error {
 			messages, dropped := make([][]matchi.Message, len(stage1.Types)), make([][]string, len(stage1.Types))
 			scope := matchi.WithScope(ctx, id, "extract")
 			// 먼저 유형들을 함께 보며 유형마다 이용 사정을 한 문장씩 쓴다. 유형별 요청은 그 사정을 범위로 받는다.
-			shared, shareMessages, err := matchi.Write(scope, c.Writer, matchi.Spec[Shares]{Name: "Shares", Instructions: sharePrompt,
-				Input: ShareRequest(source, stage1.Types, catalog, stage1.NoQueryAspects), Enums: map[string][]string{"TypeShare.type": stage1.Types},
-				Check: func(s *Shares) string { return shareIssues(s, stage1.Types) }})
+			written, summaryMessages, err := matchi.Write(scope, c.Writer, matchi.Spec[TypeSummaries]{Name: "Summaries", Instructions: summaryPrompt,
+				Input:  SummaryRequest(source, stage1.Types, catalog, stage1.NoQueryAspects),
+				Enums:  map[string][]string{"TypeSummary.type": stage1.Types},
+				Limits: map[string]matchi.Limit{"TypeSummaries.summaries": {Min: len(stage1.Types), Max: len(stage1.Types)}},
+				Check:  func(s *TypeSummaries) string { return summaryIssues(s, stage1.Types) }})
 			if err != nil {
 				return fmt.Errorf("민원 %s: 유형별 사정: %w", id, err)
 			}
-			record.Messages = append(record.Messages, shareMessages...)
-			shares := map[string]string{}
+			record.Messages = append(record.Messages, summaryMessages...)
+			summaries := map[string]string{}
 			// 같은 유형을 여러 항목에 나누어 쓰면 한 사정으로 잇는다.
-			for _, s := range shared.Readings {
-				if reading := strings.TrimSpace(s.Reading); reading != "" && shares[s.Type] == "" {
-					shares[s.Type] = reading
-				} else if reading != "" {
-					shares[s.Type] += " " + reading
+			for _, s := range written.Items {
+				if summary := strings.TrimSpace(s.Summary); summary != "" && summaries[s.Type] == "" {
+					summaries[s.Type] = summary
+				} else if summary != "" {
+					summaries[s.Type] += " " + summary
 				}
 			}
 			err = repo.ForEach(stage1.Types, len(stage1.Types), func(t string) error {
-				i, input := index[t], Request(source, stage1.Types, t, catalog, stage1.NoQueryAspects, shares)
+				i, input := index[t], Request(source, stage1.Types, t, catalog, stage1.NoQueryAspects, summaries)
 				problem := Problem{Type: t}
 				var err error
 				if slices.Contains(stage1.NoQuery, t) {
-					var reading *TypeGrounding
-					if reading, messages[i], err = matchi.Write(scope, c.Writer, matchi.Spec[TypeGrounding]{Name: "Grounding", Instructions: groundingPrompt, Input: input}); err == nil {
-						problem.Grounding = reading.Grounding
+					var grounded *TypeGrounding
+					if grounded, messages[i], err = matchi.Write(scope, c.Writer, matchi.Spec[TypeGrounding]{Name: "Grounding", Instructions: groundingPrompt, Input: input}); err == nil {
+						problem.Grounding = grounded.Grounding
 					}
 				} else {
-					var reading *TypeReading
-					if reading, messages[i], err = matchi.Write(scope, c.Writer, matchi.Spec[TypeReading]{Name: "Reading", Instructions: prompt, Input: input}); err == nil {
-						problem.Reading, problem.Grounding, problem.Moves = shares[t], reading.Grounding, reading.Moves
+					var moved *TypeMoves
+					if moved, messages[i], err = matchi.Write(scope, c.Writer, matchi.Spec[TypeMoves]{Name: "Moves", Instructions: prompt, Input: input}); err == nil {
+						problem.Summary, problem.Grounding, problem.Moves = summaries[t], moved.Grounding, moved.Moves
 					}
 				}
 				if err != nil {
@@ -923,18 +925,18 @@ func RouteEnd(text, quote string) bool {
 	return (strings.HasPrefix(rest, "에서출발하여") || strings.HasPrefix(rest, "에서출발해")) && routeSubject.MatchString(flat[:at])
 }
 
-// shareIssues는 유형별 사정에서 빠진 유형을 고칠 내용으로 돌려준다. 거듭 쓴 유형은 이어 붙이므로 고치게 하지 않는다.
-func shareIssues(s *Shares, types []string) string {
+// summaryIssues는 유형별 불편 요약에서 빠진 유형을 고칠 내용으로 돌려준다. 거듭 쓴 유형은 이어 붙이므로 고치게 하지 않는다.
+func summaryIssues(s *TypeSummaries, types []string) string {
 	count := map[string]int{}
-	for _, r := range s.Readings {
-		if strings.TrimSpace(r.Reading) != "" {
+	for _, r := range s.Items {
+		if strings.TrimSpace(r.Summary) != "" {
 			count[r.Type]++
 		}
 	}
 	issues := []string{}
 	for _, t := range types {
 		if count[t] == 0 {
-			issues = append(issues, t+"의 reading을 쓴다")
+			issues = append(issues, t+"의 summary를 쓴다")
 		}
 	}
 	return strings.Join(issues, "\n")

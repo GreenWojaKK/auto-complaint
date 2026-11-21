@@ -249,7 +249,7 @@ func judgeMapPlaces(ctx context.Context, l lookup, d *matchi.Decider, s *MapSear
 		for _, item := range passed {
 			titles = append(titles, item.Title)
 		}
-		m["candidates"] = []J{{"id": jsonx.Str(m["id"]) + ".near", "kind": "nearby", "name": SearchText(m), "basis": "지도 검색", "places": titles, "stops": counts, "stop_ids": ids}}
+		m["candidates"] = []J{{"id": jsonx.Str(m["id"]) + ".near", "kind": "nearby", "name": SearchText(m), "basis": "지도 검색", "places": titles, "stop_counts": counts, "stop_ids": ids}}
 	}
 	return messages, nil
 }

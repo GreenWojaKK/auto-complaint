@@ -49,6 +49,7 @@ func (l lookup) rows(query string) ([]J, error) {
 
 var (
 	areaSuffix = regexp.MustCompile(`(쪽|일대|주변|근처|부근|인근|방면|방향)$`)
+	regionJosa = regexp.MustCompile(`(에서는|에서|에는|에|으로|로|까지|부터)$`)
 	dongSuffix = regexp.MustCompile(textx.Digit + `*(동|읍|면)$`)
 )
 
@@ -72,6 +73,17 @@ func AreaMatches(text string, areas []string) []string {
 		}
 	}
 	return out
+}
+
+// IsRegionName은 지칭이 지역 전체 이름("울산", "울산시", "울산광역시" 등)인지다.
+func IsRegionName(text string, regionNames []string) bool {
+	name := regionJosa.ReplaceAllString(areaSuffix.ReplaceAllString(textx.Squeeze(text), ""), "")
+	for _, r := range regionNames {
+		if name != "" && name == textx.Squeeze(r) {
+			return true
+		}
+	}
+	return false
 }
 
 // DistrictMatches는 지칭이 구·군 하나만 가리키면('동구', '동구 쪽', '울주') 그 구·군의 이름과 행정동 전체를 돌려준다. '동구청'처럼 다른 말이 붙으면 구·군이 아니다.
@@ -127,7 +139,7 @@ func (c *candidateMaker) stopCounts(names []string) (J, error) {
 }
 
 func (c *candidateMaker) add(role string, item J, problem, move int) J {
-	m := J{"id": fmt.Sprintf("m%d", len(c.mentions)+1), "role": role, "problem": problem, "move": move, "text": item["text"], "quote": item["quote"]}
+	m := J{"id": fmt.Sprintf("m%d", len(c.mentions)+1), "role": role, "problem_index": problem, "move": move, "text": item["text"], "quote": item["quote"]}
 	c.mentions = append(c.mentions, m)
 	return m
 }
@@ -147,10 +159,15 @@ func (c *candidateMaker) place(m, item J, routes []string) error {
 		if err != nil {
 			return err
 		}
-		m["candidates"] = []J{{"id": jsonx.Str(m["id"]) + ".area", "kind": "area", "name": prior["key"], "basis": "지역 사전", "areas": prior["areas"], "stops": stops}}
+		m["candidates"] = []J{{"id": jsonx.Str(m["id"]) + ".area", "kind": "area", "name": prior["key"], "basis": "지역 사전", "areas": prior["areas"], "stop_counts": stops}}
 		return nil
 	}
 	text := jsonx.Str(item["text"])
+	// 지역 이름 전체("울산", "울산시", "울산광역시")는 정류장 하나를 가리키지 않는다.
+	if IsRegionName(text, c.tools.Region().Names()) {
+		m["candidates"] = []J{}
+		return nil
+	}
 	// 구·군을 말한 지칭은 그 구·군 전체를 본다. 글자가 겹치는 정류장(동구 → 동구청)으로 좁히지 않는다.
 	if district, names := DistrictMatches(text, c.areas, c.tools.Region().Names()...); len(names) > 0 {
 		stops, err := c.stopCounts(names)
@@ -162,7 +179,7 @@ func (c *candidateMaker) place(m, item J, routes []string) error {
 			_, dong, _ := strings.Cut(a, " ")
 			areas = append(areas, J{"name": dong, "area": a})
 		}
-		m["candidates"] = []J{{"id": jsonx.Str(m["id"]) + ".area", "kind": "area", "scope": "district", "name": district, "basis": "구·군 이름", "areas": areas, "stops": stops}}
+		m["candidates"] = []J{{"id": jsonx.Str(m["id"]) + ".area", "kind": "area", "scope": "district", "name": district, "basis": "구·군 이름", "areas": areas, "stop_counts": stops}}
 		return nil
 	}
 	key := text + "\x00" + strings.Join(routes, "\x00")
@@ -194,7 +211,7 @@ func (c *candidateMaker) place(m, item J, routes []string) error {
 			name = after
 		}
 		candidates = append(candidates, J{"id": fmt.Sprintf("%s.a%d", jsonx.Str(m["id"]), i+1), "kind": "area", "name": a, "basis": "행정동 이름",
-			"areas": []J{{"name": name, "area": a}}, "stops": stops})
+			"areas": []J{{"name": name, "area": a}}, "stop_counts": stops})
 	}
 	m["candidates"] = candidates
 	return nil

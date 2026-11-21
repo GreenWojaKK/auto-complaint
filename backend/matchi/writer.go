@@ -38,6 +38,7 @@ type Writer struct {
 type Spec[T any] struct {
 	Name, Instructions, Input string
 	Enums                     map[string][]string
+	Limits                    map[string]Limit
 	Check                     func(*T) string
 	Retries                   int
 }
@@ -61,7 +62,7 @@ type responsesReply struct {
 
 // Write는 출력 형식과 검사를 통과한 값을 돌려준다. 통과하지 못하면 어긋난 곳을 알려 다시 쓰게 한다. 검사 통과 전까지의 응답도 messages에 남는다.
 func Write[T any](ctx context.Context, w *Writer, spec Spec[T]) (*T, []Message, error) {
-	schema, err := SchemaOf[T](spec.Enums)
+	schema, err := SchemaOf[T](spec.Enums, spec.Limits)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -30,7 +30,7 @@ var (
 )
 
 func moveKey(m J) string {
-	return fmt.Sprintf("%d|%d", int(jsonx.Num(m["problem"])), int(jsonx.Num(m["move"])))
+	return fmt.Sprintf("%d|%d", int(jsonx.Num(m["problem_index"])), int(jsonx.Num(m["move"])))
 }
 
 // MoveLink는 판정할 이동과 그 이동에 잇는지 물을 지칭이다.
@@ -124,7 +124,7 @@ func judgeLinks(ctx context.Context, d *matchi.Decider, cands, ext J, catalog ma
 	list := jsonx.List(ext["problems"])
 	questions := make([]matchi.Question, len(pairs))
 	for i, p := range pairs {
-		kind := jsonx.Str(jsonx.Obj(list[int(jsonx.Num(p.Move[0]["problem"]))-1])["type"])
+		kind := jsonx.Str(jsonx.Obj(list[int(jsonx.Num(p.Move[0]["problem_index"]))-1])["type"])
 		questions[i] = matchi.Question{Key: fmt.Sprintf("l%d", i+1), Text: LinkQuestion(p, catalog[kind].FitText()), Options: linkOptions}
 	}
 	answers, messages, err := d.Decide(ctx, source, questions, linkAsk)
@@ -133,7 +133,7 @@ func judgeLinks(ctx context.Context, d *matchi.Decider, cands, ext J, catalog ma
 	}
 	for i, p := range pairs {
 		yes := problems.Round(answers[fmt.Sprintf("l%d", i+1)]["yes"])
-		links = append(links, J{"problem": p.Move[0]["problem"], "move": p.Move[0]["move"], "mention": p.Mention["id"], "role": p.Mention["role"], "text": p.Mention["text"],
+		links = append(links, J{"problem_index": p.Move[0]["problem_index"], "move": p.Move[0]["move"], "mention": p.Mention["id"], "role": p.Mention["role"], "text": p.Mention["text"],
 			"yes": yes, "linked": yes >= linkThreshold})
 	}
 	cands["moveLinks"] = links

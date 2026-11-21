@@ -43,12 +43,12 @@ type L1 struct {
 	Headline  string   `json:"headline"`
 	Situation []string `json:"situation" min:"1" max:"4"`
 	Requests  []string `json:"requests"`
-	Replies   []string `json:"replies"`
+	Inquiries   []string `json:"inquiries"`
 }
 
-// Asked는 모델이 쓰는 요청·문의 하나다. From은 시민이 그것을 말한 원문 구절이고, Text는 행정 문서 문체로 다시 쓴 글이다.
+// Asked는 모델이 쓰는 요청·문의 하나다. Quote는 시민이 그것을 말한 원문 구절이고, Text는 행정 문서 문체로 다시 쓴 글이다.
 type Asked struct {
-	From string `json:"from" desc:"시민이 이 요청·문의를 말한 원문 구절. 원문 그대로 발췌한다"`
+	Quote string `json:"quote" desc:"시민이 이 요청·문의를 말한 원문 구절. 원문 그대로 발췌한다"`
 	Text string `json:"text" desc:"행정 문서 문체로 다시 쓴 요청·문의"`
 }
 
@@ -57,7 +57,7 @@ type L1Draft struct {
 	Headline  string   `json:"headline" desc:"장소와 원문의 시간 맥락을 앞에 두고 이용 불편을 붙인 짧은 명사구"`
 	Situation []string `json:"situation" desc:"한 항목에 한 사실. 이 시민이 어디서 어떤 이동·이용을 하며 무엇을 겪는지를 행정 문서 문체로 쓰고 '~함', '~임', '~라고 함'으로 맺는다" min:"1" max:"4"`
 	Requests  []Asked  `json:"requests" max:"6"`
-	Replies   []Asked  `json:"replies" max:"4"`
+	Inquiries   []Asked  `json:"inquiries" max:"4"`
 }
 
 // 시민이 조치를 바라는 표현과 묻는 표현. 요청의 발췌 구절에는 바라는 표현이, 문의의 발췌 구절에는 묻거나 부탁하는 표현이 있어야 한다.
@@ -86,20 +86,20 @@ func asks(phrase string) bool {
 	return false
 }
 
-// Settle은 모델이 쓴 요약을 원문에 맞춘다. 상황 문장은 명사형으로 맺는다. 발췌한 구절이 원문에 그대로 없는 요청·문의는 버린다.
+// Settle은 모델이 쓴 요약을 원문에 맞춘다. 발췌한 구절이 원문에 그대로 없는 요청·문의는 버린다.
 // 요청은 구절에 바라는 표현이 있으면 남긴다. 바라는 표현 없이 묻는 표현만 있으면, 모델이 문의로 쓴 글은 문의로 옮기고 요청으로 쓴 글은
 // 반문으로 한 요구로 보아 남긴다. 둘 다 없으면 버린다. 문의는 구절에 묻는 표현이 있으면 남긴다. 묻는 표현 없이 바라는 표현만 있으면
 // 부탁으로 쓴 글은 남기고 그 밖의 글은 요청으로 옮긴다. 둘 다 없으면 버린다. 같은 글의 항목과 같은 구절의 문의는 하나만 남긴다.
 func (d L1Draft) Settle(source string) (L1, []string) {
 	flat := textx.Squeeze(source)
-	out, dropped := L1{Headline: strings.TrimSpace(d.Headline), Situation: []string{}, Requests: []string{}, Replies: []string{}}, []string{}
+	out, dropped := L1{Headline: strings.TrimSpace(d.Headline), Situation: []string{}, Requests: []string{}, Inquiries: []string{}}, []string{}
 	for _, s := range d.Situation {
 		// 요청을 상황으로 다시 쓴 항목("~해 달라는 요청이 있음")은 상황이 아니다. 요청은 requests에 있다.
 		if wishAsSituation.MatchString(s) {
 			dropped = append(dropped, "situation «"+s+"»: 요청을 상황으로 쓴 항목")
 			continue
 		}
-		if s = textx.Nominal(s); s != "" {
+		if s = strings.TrimSpace(s); s != "" {
 			out.Situation = append(out.Situation, s)
 		}
 	}
@@ -123,47 +123,47 @@ func (d L1Draft) Settle(source string) (L1, []string) {
 		}
 	}
 	reply := func(item Asked, text string) {
-		if from := textx.Squeeze(item.From); !asked[from] {
+		if from := textx.Squeeze(item.Quote); !asked[from] {
 			asked[from] = true
 			if strings.HasSuffix(text, "요청") {
 				text = bare(text) + " 부탁"
 			}
-			add(&out.Replies, text)
+			add(&out.Inquiries, text)
 		}
 	}
 	quoted := func(item Asked, where string) bool {
-		if from := textx.Squeeze(item.From); from != "" && strings.Contains(flat, from) {
+		if from := textx.Squeeze(item.Quote); from != "" && strings.Contains(flat, from) {
 			return true
 		}
-		dropped = append(dropped, where+" «"+item.Text+"» / «"+item.From+"»: 원문에 없는 구절")
+		dropped = append(dropped, where+" «"+item.Text+"» / «"+item.Quote+"»: 원문에 없는 구절")
 		return false
 	}
 	for _, item := range d.Requests {
 		text := strings.TrimSpace(item.Text)
 		switch {
 		case !quoted(item, "requests"):
-		case wishCue.MatchString(item.From):
+		case wishCue.MatchString(item.Quote):
 			add(&out.Requests, bare(text)+" 요청")
-		case asks(item.From) && (strings.HasSuffix(text, "문의") || strings.HasSuffix(text, "부탁")):
+		case asks(item.Quote) && (strings.HasSuffix(text, "문의") || strings.HasSuffix(text, "부탁")):
 			reply(item, text)
-		case asks(item.From):
+		case asks(item.Quote):
 			add(&out.Requests, bare(text)+" 요청")
 		default:
-			dropped = append(dropped, "requests «"+item.Text+"» / «"+item.From+"»: 바라는 표현이 없는 구절")
+			dropped = append(dropped, "requests «"+item.Text+"» / «"+item.Quote+"»: 바라는 표현이 없는 구절")
 		}
 	}
-	for _, item := range d.Replies {
+	for _, item := range d.Inquiries {
 		text := strings.TrimSpace(item.Text)
 		switch {
-		case !quoted(item, "replies"):
-		case asks(item.From):
+		case !quoted(item, "inquiries"):
+		case asks(item.Quote):
 			reply(item, text)
-		case wishCue.MatchString(item.From) && strings.HasSuffix(text, "부탁"):
+		case wishCue.MatchString(item.Quote) && strings.HasSuffix(text, "부탁"):
 			reply(item, text)
-		case wishCue.MatchString(item.From):
+		case wishCue.MatchString(item.Quote):
 			add(&out.Requests, bare(text)+" 요청")
 		default:
-			dropped = append(dropped, "replies «"+item.Text+"» / «"+item.From+"»: 묻는 표현이 없는 구절")
+			dropped = append(dropped, "inquiries «"+item.Text+"» / «"+item.Quote+"»: 묻는 표현이 없는 구절")
 		}
 	}
 	return out, dropped
@@ -318,20 +318,20 @@ func Assemble(choice *PlanChoice, b *Built, cands, ext J) J {
 		var method J
 		switch kind := jsonx.Str(o["method"]); kind {
 		case "departures":
-			method = J{"method": kind, "boarding": each(stringsOf(o["boarding"]), stops), "destination": each(stringsOf(o["destination"]), stops), "routes": o["routes"],
-				"window": window, "time_kind": "departure", "direct": len(stringsOf(o["destination"])) > 0, "gap_over": o["gap_over"], "gap_columns": o["gap_columns"]}
+			method = J{"method": kind, "boarding_candidates": each(stringsOf(o["boarding_mentions"]), stops), "destination_candidates": each(stringsOf(o["destination_mentions"]), stops), "routes": o["routes"],
+				"window": window, "time_kind": "departure", "direct": len(stringsOf(o["destination_mentions"])) > 0, "gap_over": o["gap_over"], "gap_columns": o["gap_columns"]}
 			if o["at_destination"] == true {
 				method["at_destination"], method["time_kind"] = true, "arrival"
 			}
 		case "route_departures":
 			method = J{"method": kind, "routes": o["routes"], "window": window, "gap_over": o["gap_over"], "gap_columns": o["gap_columns"]}
 		case "journeys":
-			method = J{"method": kind, "origin": places[jsonx.Str(o["origin"])], "destination": places[jsonx.Str(o["destination"])], "routes": o["routes"],
+			method = J{"method": kind, "origin_candidates": []string{places[jsonx.Str(o["origin_mentions"])]}, "destination_candidates": []string{places[jsonx.Str(o["destination_mentions"])]}, "routes": o["routes"],
 				"window": window, "arrive_by": window["arrive_by"], "walk_meters": 600, "transfers": 1}
 		case "segments":
-			method = J{"method": kind, "origin": each(stringsOf(o["origin"]), stops), "destination": each(stringsOf(o["destination"]), stops), "routes": o["routes"], "window": window}
+			method = J{"method": kind, "origin_candidates": each(stringsOf(o["origin_mentions"]), stops), "destination_candidates": each(stringsOf(o["destination_mentions"]), stops), "routes": o["routes"], "window": window}
 		default:
-			method = J{"method": kind, "routes": o["routes"], "stops": o["stops"]}
+			method = J{"method": kind, "routes": o["routes"], "map_mentions": o["map_mentions"]}
 		}
 		if p := jsonx.Str(o["period"]); p == "compare" || p == "before" {
 			method["before_routes"] = o["before_routes"]
@@ -620,8 +620,18 @@ func one(ctx context.Context, c Config, id, prompt, prior, received string, cata
 	if err != nil {
 		return err
 	}
+	selected := SelectedOptions(built)
+	optIDs := make([]string, 0, len(selected))
+	for _, o := range selected {
+		optIDs = append(optIDs, jsonx.Str(o["id"]))
+	}
+	var enums map[string][]string
+	if len(optIDs) > 0 {
+		enums = map[string][]string{"Check.option": optIDs}
+	}
 	choice, messages, err := matchi.Write(matchi.WithScope(ctx, id, "plan"), c.Writer, matchi.Spec[PlanChoice]{
-		Name: "PlanChoice", Instructions: prompt, Input: Request(source, day, cands, ext, catalog, prior, built), Check: IssuesCheck(built)})
+		Name: "PlanChoice", Instructions: prompt, Input: Request(source, day, cands, ext, catalog, prior, built),
+		Enums: enums, Limits: map[string]matchi.Limit{"PlanChoice.checks": {Min: len(optIDs), Max: len(optIDs)}}, Check: IssuesCheck(built)})
 	if err != nil {
 		return err
 	}

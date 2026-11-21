@@ -66,7 +66,7 @@ func usable(mention J, revision string) []J {
 	out := []J{}
 	for _, c := range candidatesOf(mention) {
 		if kind := jsonx.Str(c["kind"]); kind == "area" || kind == "nearby" {
-			if jsonx.Num(jsonx.Obj(c["stops"])[revision]) != 0 {
+			if jsonx.Num(jsonx.Obj(c["stop_counts"])[revision]) != 0 {
 				out = append(out, c)
 			}
 		} else if datasets, ok := c["datasets"]; !ok || slices.Contains(jsonx.Strs(datasets), revision) {
@@ -272,7 +272,7 @@ func BuildOptions(cands, ext J) (*Built, error) {
 			var here []J
 			ids := []string{}
 			for _, m := range mentions {
-				if int(jsonx.Num(m["problem"])) == pi+1 && int(jsonx.Num(m["move"])) == mi+1 {
+				if int(jsonx.Num(m["problem_index"])) == pi+1 && int(jsonx.Num(m["move"])) == mi+1 {
 					here = append(here, m)
 					ids = append(ids, jsonx.Str(m["id"]))
 				}
@@ -373,11 +373,11 @@ func BuildOptions(cands, ext J) (*Built, error) {
 						ends = [][]string{{}}
 					}
 					for _, e := range ends {
-						if err := add(slot, "departures", columns, true, condition{"boarding", []string{a}}, condition{"destination", e}, condition{"routes", routes}, condition{"window", window}); err != nil {
+						if err := add(slot, "departures", columns, true, condition{"boarding_mentions", []string{a}}, condition{"destination_mentions", e}, condition{"routes", routes}, condition{"window", window}); err != nil {
 							return nil, err
 						}
 						if len(routes) > 0 && len(e) > 0 {
-							if err := add(slot, "departures", columns, true, condition{"boarding", []string{a}}, condition{"destination", e}, condition{"routes", []string{}}, condition{"window", window}); err != nil {
+							if err := add(slot, "departures", columns, true, condition{"boarding_mentions", []string{a}}, condition{"destination_mentions", e}, condition{"routes", []string{}}, condition{"window", window}); err != nil {
 								return nil, err
 							}
 						}
@@ -385,7 +385,7 @@ func BuildOptions(cands, ext J) (*Built, error) {
 				}
 				if arrival {
 					for _, d := range destination[:min(len(destination), maxEnds)] {
-						if err := add(slot, "departures", columns, true, condition{"boarding", []string{d}}, condition{"destination", []string{}}, condition{"routes", routes}, condition{"window", window}, condition{"at_destination", true}); err != nil {
+						if err := add(slot, "departures", columns, true, condition{"boarding_mentions", []string{d}}, condition{"destination_mentions", []string{}}, condition{"routes", routes}, condition{"window", window}, condition{"at_destination", true}); err != nil {
 							return nil, err
 						}
 					}
@@ -400,7 +400,7 @@ func BuildOptions(cands, ext J) (*Built, error) {
 				for _, a := range placesFrom[:min(len(placesFrom), maxEnds)] {
 					for _, d := range placesTo[:min(len(placesTo), maxEnds)] {
 						if a != d {
-							if err := add(slot, "journeys", nil, false, condition{"origin", a}, condition{"destination", d}, condition{"routes", routes}, condition{"window", window}); err != nil {
+							if err := add(slot, "journeys", nil, false, condition{"origin_mentions", a}, condition{"destination_mentions", d}, condition{"routes", routes}, condition{"window", window}); err != nil {
 								return nil, err
 							}
 						}
@@ -410,7 +410,7 @@ func BuildOptions(cands, ext J) (*Built, error) {
 					for _, a := range origin[:min(len(origin), maxEnds)] {
 						for _, d := range destination[:min(len(destination), maxEnds)] {
 							if a != d {
-								if err := add(slot, "segments", nil, false, condition{"origin", []string{a}}, condition{"destination", []string{d}}, condition{"routes", routes}, condition{"window", window}); err != nil {
+								if err := add(slot, "segments", nil, false, condition{"origin_mentions", []string{a}}, condition{"destination_mentions", []string{d}}, condition{"routes", routes}, condition{"window", window}); err != nil {
 									return nil, err
 								}
 							}
@@ -420,7 +420,7 @@ func BuildOptions(cands, ext J) (*Built, error) {
 			}
 			if len(routes) > 0 {
 				stops := append(append(append([]string{}, origin...), destination...), others...)
-				if err := add(slot, "map", nil, false, condition{"routes", routes}, condition{"stops", stops}); err != nil {
+				if err := add(slot, "map", nil, false, condition{"routes", routes}, condition{"map_mentions", stops}); err != nil {
 					return nil, err
 				}
 			}
@@ -572,26 +572,26 @@ func OptionLabel(o J, byID map[string]J, chosen map[string]string) string {
 		return strings.Join(parts, " / ")
 	}
 	parts := []string{fmt.Sprintf("%s [%s]", jsonx.Str(o["id"]), MethodNames[jsonx.Str(o["method"])])}
-	if present(o["boarding"]) {
+	if present(o["boarding_mentions"]) {
 		label := "승차 "
 		if o["at_destination"] == true {
 			label = "도착 "
 		}
-		parts = append(parts, label+names(o["boarding"]))
+		parts = append(parts, label+names(o["boarding_mentions"]))
 	}
-	if present(o["origin"]) {
-		parts = append(parts, "출발 "+names(o["origin"]))
+	if present(o["origin_mentions"]) {
+		parts = append(parts, "출발 "+names(o["origin_mentions"]))
 	}
-	if present(o["destination"]) {
-		parts = append(parts, "도착 "+names(o["destination"]))
+	if present(o["destination_mentions"]) {
+		parts = append(parts, "도착 "+names(o["destination_mentions"]))
 	}
 	if present(o["routes"]) {
 		parts = append(parts, "노선 "+strings.Join(stringsOf(o["routes"]), ", "))
 	} else if o["method"] == "departures" {
 		parts = append(parts, "서는 노선 전체")
 	}
-	if present(o["stops"]) {
-		parts = append(parts, "표시 "+names(o["stops"]))
+	if present(o["map_mentions"]) {
+		parts = append(parts, "표시 "+names(o["map_mentions"]))
 	}
 	if w := jsonx.Obj(o["window"]); w != nil {
 		parts = append(parts, windowLine(w))
@@ -630,14 +630,14 @@ func optionConditions(o J, byID map[string]J, revision string) []string {
 		return out
 	}
 	lines := []string{}
-	for _, f := range [][2]string{{"boarding", "승차"}, {"origin", "출발"}, {"destination", "도착"}} {
+	for _, f := range [][2]string{{"boarding_mentions", "승차"}, {"origin_mentions", "출발"}, {"destination_mentions", "도착"}} {
 		if present(o[f[0]]) {
 			parts := []string{}
 			for _, i := range ends(o[f[0]]) {
 				parts = append(parts, place(i))
 			}
 			label := f[1]
-			if f[0] == "boarding" && o["at_destination"] == true {
+			if f[0] == "boarding_mentions" && o["at_destination"] == true {
 				label = "도착"
 			}
 			lines = append(lines, label+": "+strings.Join(parts, " / "))
@@ -734,20 +734,38 @@ func span(o J) int {
 	return end - start
 }
 
-// mergesInto는 시간대만 다른 같은 조회이고, narrow의 시간대가 하루 전체가 아닌 wide의 시간대 안에 드는지다. 여정은 도착 기한인지도 같아야 한다.
+func periodSubsumes(narrow, wide J) bool {
+	np, wp := jsonx.Str(narrow["period"]), jsonx.Str(wide["period"])
+	if np == wp {
+		return reflect.DeepEqual(narrow["before_routes"], wide["before_routes"])
+	}
+	return wp == "compare" && (np == "" || np == "none" || np == "after")
+}
+
+// mergesInto는 시간대만 다른 같은 조회이고 narrow의 시간대가 하루 전체가 아닌 wide의 시간대 안에 들거나,
+// 조건이 모두 같은데 wide가 개편 전후 비교(compare)이고 narrow가 한 판(after/none)인지다.
 // 모델이 범위를 정할 수 있는 조회와 하루 전체는 합치지 않는다. 하루 전체로 합치면 시민이 말한 시간대의 답이 사라진다.
 func mergesInto(narrow, wide J) bool {
-	a, b := jsonx.Obj(narrow["window"]), jsonx.Obj(wide["window"])
-	if a == nil || b == nil || a["ask"] == true || b["ask"] == true || !reflect.DeepEqual(a["day"], b["day"]) {
+	if !periodSubsumes(narrow, wide) {
 		return false
 	}
-	for _, k := range []string{"method", "boarding", "origin", "destination", "routes", "period", "before_routes"} {
+	for _, k := range []string{"method", "boarding_mentions", "origin_mentions", "destination_mentions", "routes", "map_mentions", "at_destination"} {
 		if !reflect.DeepEqual(narrow[k], wide[k]) {
 			return false
 		}
 	}
+	a, b := jsonx.Obj(narrow["window"]), jsonx.Obj(wide["window"])
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil || a["ask"] == true || b["ask"] == true || !reflect.DeepEqual(a["day"], b["day"]) {
+		return false
+	}
 	if narrow["method"] == "journeys" && a["arrive_by"] != b["arrive_by"] {
 		return false
+	}
+	if a["start"] == b["start"] && a["end"] == b["end"] {
+		return true
 	}
 	low, _ := execute.Minutes(jsonx.Str(b["start"]))
 	high, _ := execute.Minutes(jsonx.Str(b["end"]))
@@ -756,7 +774,8 @@ func mergesInto(narrow, wide J) bool {
 	return high-low < 24*60 && low <= start && end <= high
 }
 
-// SelectedOptions는 판정을 통과해 실행할 조회다. 시간대만 다른 같은 조회는 넓은 시간대 하나로 합치고, 합쳐진 칸과 기준 수치를 넘겨받는다.
+// SelectedOptions는 판정을 통과해 실행할 조회다. 시간대만 다른 같은 조회는 넓은 시간대 하나로, 조건이 같은 개편 전후 비교와 한 판 조회는
+// 비교 하나로 합치고, 합쳐진 칸과 기준 수치를 넘겨받는다.
 func SelectedOptions(b *Built) []J {
 	passed := []J{}
 	for _, o := range b.Options {
@@ -764,8 +783,14 @@ func SelectedOptions(b *Built) []J {
 			passed = append(passed, o)
 		}
 	}
-	// 넓은 시간대부터 본다. 같은 폭이면 앞의 선택지가 남는다.
-	sort.SliceStable(passed, func(i, j int) bool { return span(passed[i]) > span(passed[j]) })
+	// 넓은 시간대부터 보고, 폭이 같으면 개편 전후 비교(compare)를 앞에 둔다.
+	sort.SliceStable(passed, func(i, j int) bool {
+		si, sj := span(passed[i]), span(passed[j])
+		if si != sj {
+			return si > sj
+		}
+		return jsonx.Str(passed[i]["period"]) == "compare" && jsonx.Str(passed[j]["period"]) != "compare"
+	})
 	kept := []J{}
 	for _, o := range passed {
 		var wide J

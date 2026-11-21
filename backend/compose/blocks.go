@@ -114,7 +114,7 @@ func seriesTable(todo, executed, evidence J, function string) (J, []string) {
 	all := runs(executed)
 	compare := len(all) > 1
 	gapColumns := jsonx.Ints(m["gap_columns"])
-	hasDestination := function == "calls_summary" && truthy(m["destination"])
+	hasDestination := function == "calls_summary" && truthy(m["destination_candidates"])
 	columns := []any{}
 	if compare {
 		columns = append(columns, "자료")

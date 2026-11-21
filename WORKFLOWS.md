@@ -43,7 +43,7 @@ tools/build_kernels.sh ../Dllio-artifact/bin
 ../Dllio-artifact/bin/dllio compose --run "$run_dir"
 ```
 
-단계별 입력·판정·검증·출력은 [ANALYSIS_STAGES](docs/ANALYSIS_STAGES.md)를 따른다.
+단계마다 정하는 것과 입출력·담당은 [ANALYSIS_STAGES](docs/ANALYSIS_STAGES.md)를 따른다.
 
 | 항목 | 동작 |
 |---|---|

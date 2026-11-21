@@ -45,9 +45,9 @@
 | [narrative.md](narrative.md) | 민원 게시판에서 담당자의 책상까지 이어지는 문제의식 |
 | [WORKFLOWS.md](WORKFLOWS.md) | 실행 순서와 명령, 결과 검토 |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 표현 수준, 단계별 담당, 원칙, 코드 경로 |
-| [ANALYSIS_STAGES.md](docs/ANALYSIS_STAGES.md) | 단계별 입력·판정·검사·출력 |
+| [ANALYSIS_STAGES.md](docs/ANALYSIS_STAGES.md) | 단계마다 정하는 것, 입출력, 담당, 분기, 지키는 조건 |
 | [L2_CATALOG.md](docs/L2_CATALOG.md) | 문제 유형과 유형 사이의 경계 |
-| [READING_LEVELS.md](docs/READING_LEVELS.md) | L2·L1과 화면 표현 |
+| [CODEBASE_GLOSSARY.md](docs/CODEBASE_GLOSSARY.md) | 개념별 이름(문서·코드·JSON·지시문) |
 | [MODEL_RUNTIME.md](docs/MODEL_RUNTIME.md) | 판정·생성 호출, 출력 형식 검사, 호출 기록 |
 | [TRANSIT_BACKEND.md](docs/TRANSIT_BACKEND.md) | 교통 자료 준비, 조회 도구, 여정·배차·구간 계산 |
 

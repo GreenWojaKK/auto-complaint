@@ -45,10 +45,10 @@ type ValueReference struct {
 
 // Answer는 todo 하나의 답이다. 모델은 필드 순서대로 쓴다: 답에 쓸 자료 값을 먼저 고르고, 그 값으로 문장을 쓴다.
 type Answer struct {
-	Todo   string           `json:"todo" desc:"todo id"`
-	Status string           `json:"status" enum:"답함,확인할 수 없음"`
-	Values []ValueReference `json:"values" desc:"답에 쓸 자료 수치를 조회 값에서 고른 것. 수치마다 근거 경로와 문장에 쓸 표현" max:"40"`
-	Text   string           `json:"text" desc:"행정 검토자가 읽을 답. 한두 문장, ~습니다. 자료 수치는 values에 적은 표현만 쓴다" maxlen:"800"`
+	Todo           string           `json:"todo" desc:"todo id"`
+	Status         string           `json:"status" enum:"답함,확인할 수 없음"`
+	EvidenceValues []ValueReference `json:"evidence_values" desc:"답에 쓸 자료 수치를 조회 값에서 고른 것. 수치마다 근거 경로와 문장에 쓸 표현" max:"40"`
+	Text           string           `json:"text" desc:"행정 검토자가 읽을 답. 한두 문장, ~습니다. 자료 수치는 values에 적은 표현만 쓴다" maxlen:"800"`
 }
 
 // Page는 함께 보일 todo와 블록이다.
@@ -246,7 +246,7 @@ func factLines(function string, record jsonx.Object, compared bool) []string {
 }
 
 func runLabel(run J) string {
-	stops := jsonx.Obj(run["stops"])
+	stops := jsonx.Obj(run["stop_counts"])
 	revision := jsonx.Str(run["revision"])
 	name, ok := Revisions[revision]
 	if !ok {
@@ -310,7 +310,7 @@ func Request(in Inputs) string {
 	for _, s := range jsonx.Strs(l1["requests"]) {
 		lines = append(lines, "- 요청: "+s)
 	}
-	for _, s := range jsonx.Strs(l1["replies"]) {
+	for _, s := range jsonx.Strs(l1["inquiries"]) {
 		lines = append(lines, "- 문의: "+s)
 	}
 	lines = append(lines, "", "자료로 살펴보지 않는 문제:")
@@ -418,13 +418,13 @@ func ValueErrors(text string, values []ValueReference, evidence J, quoted map[st
 	}
 	for _, numeric := range Numeric.FindAllString(text, -1) {
 		if !declared[numeric] && !quoted[textx.Squeeze(numeric)] {
-			errors = append(errors, "문장의 수치 표현에 values 근거를 연결한다: "+numeric)
+			errors = append(errors, "문장의 수치 표현에 evidence_values 근거를 연결한다: "+numeric)
 		}
 	}
 	for _, v := range values {
 		real, err := Binding(J{"$ref": v.Ref}, evidence)
 		if err != nil {
-			errors = append(errors, "values ref가 존재하지 않는다: "+v.Ref)
+			errors = append(errors, "evidence_values ref가 존재하지 않는다: "+v.Ref)
 			continue
 		}
 		switch x := real.(type) {
@@ -480,7 +480,7 @@ func cells(path string, value any, out *[]cell) {
 // 첫 칸이 근거다. 시각은 그 시각이 적힌 글 칸(시각 하나 또는 시각 목록)을 근거로 삼는다. 조회 값에 없는 수치는 그대로 두어, 검사가 다시 쓰게 한다.
 func bindValues(a *Answer, evidence J, owner map[string]map[string]bool, quoted map[string]bool) {
 	declared := map[string]bool{}
-	for _, v := range a.Values {
+	for _, v := range a.EvidenceValues {
 		declared[v.Text] = true
 	}
 	var owned []cell
@@ -512,7 +512,7 @@ func bindValues(a *Answer, evidence J, owner map[string]map[string]bool, quoted 
 				same = strings.Contains(numeric, ":") && strings.Contains(textx.Squeeze(x), textx.Squeeze(numeric))
 			}
 			if same {
-				a.Values = append(a.Values, ValueReference{Ref: c.path, Text: numeric})
+				a.EvidenceValues = append(a.EvidenceValues, ValueReference{Ref: c.path, Text: numeric})
 				declared[numeric] = true
 				break
 			}
@@ -533,6 +533,9 @@ func Owners(executed J) map[string]map[string]bool {
 		t := jsonx.Obj(x)
 		for _, r := range runs(t) {
 			for _, q := range requests(r) {
+				if jsonx.Str(q["function"]) == execute.RouteStartsAlternate {
+					continue
+				}
 				add(jsonx.Str(q["evidence"]), jsonx.Str(t["id"]))
 			}
 		}
@@ -619,7 +622,7 @@ func Issues(out *Composition, executed J, blocks map[string][]J, owner map[strin
 	}
 	for _, a := range out.Answers {
 		foreign := map[string]bool{}
-		for _, v := range a.Values {
+		for _, v := range a.EvidenceValues {
 			if e := strings.SplitN(v.Ref, "/", 2)[0]; !owner[e][a.Todo] {
 				foreign[e] = true
 			}
@@ -627,7 +630,7 @@ func Issues(out *Composition, executed J, blocks map[string][]J, owner map[strin
 		if len(foreign) > 0 {
 			errors = append(errors, a.Todo+": 이 todo의 조회 값이 아니다: "+pyRepr(sortedSet(foreign)))
 		}
-		for _, e := range ValueErrors(a.Text, a.Values, evidence, quoted) {
+		for _, e := range ValueErrors(a.Text, a.EvidenceValues, evidence, quoted) {
 			errors = append(errors, a.Todo+": "+e)
 		}
 		if textx.Len(a.Text) >= answerLength {
@@ -818,16 +821,16 @@ func Check(executed J, blocks map[string][]J, source string, zero ...map[string]
 			// 없는 칸, 문장의 값과 다른 값의 칸, 다른 todo의 조회 값을 가리킨 근거 경로는 지운다. 문장의 수치는 그 todo의 조회 값에서
 			// 같은 값의 칸으로 다시 잇는다.
 			kept := []ValueReference{}
-			for _, v := range out.Answers[i].Values {
+			for _, v := range out.Answers[i].EvidenceValues {
 				if owner[strings.SplitN(v.Ref, "/", 2)[0]][out.Answers[i].Todo] && len(ValueErrors("", []ValueReference{v}, evidence, nil)) == 0 {
 					kept = append(kept, v)
 				}
 			}
-			out.Answers[i].Values = kept
+			out.Answers[i].EvidenceValues = kept
 			// 답할 수 없다고 쓴 답은 '확인할 수 없음'이다.
 			if out.Answers[i].Status == "답함" && cannotAnswer.MatchString(out.Answers[i].Text) {
 				out.Answers[i].Status = "확인할 수 없음"
-				out.Answers[i].Values = []ValueReference{}
+				out.Answers[i].EvidenceValues = []ValueReference{}
 			}
 		}
 		// 확인할 수 없음으로 둔 todo라도 그 todo의 조회가 모두 실행됐고 행이 없으면 답은 운행 0편이다.
@@ -840,7 +843,7 @@ func Check(executed J, blocks map[string][]J, source string, zero ...map[string]
 			if len(zero) > 0 && zero[0][out.Answers[i].Todo] != "" {
 				out.Answers[i].Text = zero[0][out.Answers[i].Todo]
 			}
-			out.Answers[i].Values = []ValueReference{}
+			out.Answers[i].EvidenceValues = []ValueReference{}
 		}
 		// 블록을 하나도 고르지 않은 페이지는 보일 것이 없으므로 뺀다(조회 값이 비어 블록 후보가 없는 todo의 페이지).
 		withBlocks := []Page{}
@@ -983,12 +986,15 @@ func one(ctx context.Context, c Config, out, id, prompt, prior, received, dataDa
 		return err
 	}
 	plan := jsonx.Obj(planRecord["plan"])
-	todos := map[string]J{}
+	todos, todoIDs := map[string]J{}, []string{}
 	// 질문과 그 완료 조건에 적힌 수치(여정의 4시간 한도 같은 조회 조건)는 원문의 수치처럼 근거 없이 답에 쓸 수 있다.
 	asked := source
 	for _, x := range jsonx.List(plan["todos"]) {
-		todos[jsonx.Str(jsonx.Obj(x)["id"])] = jsonx.Obj(x)
-		asked += "\n" + jsonx.Str(jsonx.Obj(x)["question"]) + "\n" + jsonx.Str(jsonx.Obj(x)["done_when"])
+		t := jsonx.Obj(x)
+		tid := jsonx.Str(t["id"])
+		todos[tid] = t
+		todoIDs = append(todoIDs, tid)
+		asked += "\n" + jsonx.Str(t["question"]) + "\n" + jsonx.Str(t["done_when"])
 	}
 	mentions := byID(jsonx.List(cands["mentions"]))
 	evidence := jsonx.Obj(executed["evidence"])
@@ -1016,7 +1022,10 @@ func one(ctx context.Context, c Config, out, id, prompt, prior, received, dataDa
 		input := Request(Inputs{Source: source, Received: received, Prior: prior, DataDay: dataDay, Plan: plan, Candidates: cands, Executed: executed,
 			Ordered: orderedEvidence, Blocks: blocks})
 		result, messages, err := matchi.Write(matchi.WithScope(ctx, id, "compose"), c.Writer, matchi.Spec[Composition]{
-			Name: "Composition", Instructions: prompt, Input: input, Check: Check(executed, blocks, asked, ZeroAnswers(plan, executed)), Retries: retries})
+			Name: "Composition", Instructions: prompt, Input: input,
+			Enums:  map[string][]string{"Answer.todo": todoIDs},
+			Limits: map[string]matchi.Limit{"Composition.answers": {Min: len(todoIDs), Max: len(todoIDs)}},
+			Check:  Check(executed, blocks, asked, ZeroAnswers(plan, executed)), Retries: retries})
 		if err != nil {
 			return err
 		}
